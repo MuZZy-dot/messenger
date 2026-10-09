@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Мессенджер</title>
+
+<!-- ============================================================
+     1. ВСТАВЬТЕ СЮДА СВОИ КЛЮЧИ FIREBASE
+     (Firebase Console → Настройки проекта → Ваши приложения → Web → firebaseConfig)
+     ============================================================ -->
+<script>
+  window.firebaseConfig = {
+    apiKey: "AIzaSyBohaUi72gROu7L-ZuP1BH04gUj-MUTt-Y",
+    authDomain: "messenger-6810a.firebaseapp.com",
+    projectId: "messenger-6810a",
+    storageBucket: "messenger-6810a.firebasestorage.app",
+    messagingSenderId: "735633746562",
+    appId: "1:735633746562:web:e16dae48e7b9a1e32aa29b"
+  };
+</script>
+
+<style>
+  :root{
+    --blue:#0088cc; --blue-dark:#0077b3; --bg-chat:#e6ebee; --bg-side:#fff;
+    --text:#222; --gray:#8b959c; --line:#e5e9ec; --bubble-in:#f4f5f7; --bubble-out:#0088cc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg-chat);overflow:hidden}
+  button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,textarea{font:inherit;color:inherit}
+  .hidden{display:none !important}
+
+  /* ---------- Загрузчик ---------- */
+  #loader{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:100}
+  .spinner{width:42px;height:42px;border:4px solid #cfe8f5;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+  .spinner.sm{width:18px;height:18px;border-width:3px;border-color:#fff6;border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---------- Экран входа ---------- */
+  #auth{height:100%;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(160deg,#4fb7ea,#0088cc 60%,#006aa0);overflow:auto}
+  .auth-card{background:#fff;width:100%;max-width:380px;border-radius:16px;padding:30px 28px;box-shadow:0 10px 40px #0004}
+  .logo{width:84px;height:84px;border-radius:50%;background:var(--blue);margin:0 auto 14px;display:flex;align-items:center;justify-content:center}
+  .logo svg{width:44px;height:44px;fill:#fff;margin-right:4px}
+  .auth-card h1{text-align:center;font-size:22px;margin-bottom:4px}
+  .auth-card .sub{text-align:center;color:var(--gray);font-size:14px;margin-bottom:18px}
+  .tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .tabs button{flex:1;padding:10px;color:var(--gray);font-weight:600;border-bottom:2px solid transparent}
+  .tabs button.active{color:var(--blue);border-color:var(--blue)}
+  .field{margin-bottom:12px}
+  .field input{width:100%;padding:12px 14px;border:1px solid #d5dbe0;border-radius:10px;outline:none;font-size:15px;transition:border-color .15s}
+  .field input:focus{border-color:var(--blue)}
+  .btn-main{width:100%;padding:12px;background:var(--blue);color:#fff;border-radius:10px;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.4px;transition:background .15s}
+  .btn-main:hover{background:var(--blue-dark)}
+  .btn-main:disabled{opacity:.7;cursor:default}
+  #authError{color:#d93b3b;font-size:13.5px;min-height:18px;margin-bottom:10px;text-align:center}
+  #cfgWarn{background:#fff3cd;color:#7a5b00;font-size:13px;padding:10px 12px;border-radius:8px;margin-bottom:14px}
+
+  /* ---------- Основной экран ---------- */
+  #app{height:100%;height:100dvh;display:flex}
+  #sidebar{width:300px;min-width:300px;background:var(--bg-side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .side-head{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .side-head .me{flex:1;min-width:0;line-height:1.25}
+  .side-head .me b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .side-head .me span{font-size:12px;color:var(--blue)}
+  .icon-btn{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gray)}
+  .icon-btn:hover{background:#f0f3f5}
+  .icon-btn svg{width:22px;height:22px;fill:currentColor}
+  .search{padding:8px 12px}
+  .search input{width:100%;padding:9px 14px;border-radius:20px;border:none;background:#f0f3f5;outline:none;font-size:14px}
+  #chatList{flex:1;overflow-y:auto}
+  .chat-item{display:flex;gap:11px;padding:9px 12px;cursor:pointer;align-items:center}
+  .chat-item:hover{background:#f4f6f7}
+  .chat-item.active{background:var(--blue);color:#fff}
+  .chat-item .info{flex:1;min-width:0}
+  .chat-item .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .chat-item .name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chat-item .time{font-size:12px;color:var(--gray);flex:none}
+  .chat-item .last{font-size:14px;color:var(--gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .chat-item.unread .last{color:var(--text);font-weight:700}
+  .chat-item.unread .time{color:var(--blue)}
+  .chat-item.active .last,.chat-item.active .time{color:#e3f4ff}
+  .badge{background:var(--blue);color:#fff;border-radius:12px;min-width:22px;height:22px;padding:0 7px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+  .chat-item.active .badge{background:#fff;color:var(--blue)}
+  .empty-list{padding:30px 16px;text-align:center;color:var(--gray);font-size:14px}
+
+  .avatar{width:48px;height:48px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:20px;position:relative;user-select:none}
+  .avatar.sm{width:40px;height:40px;font-size:17px}
+  .avatar.on::after{content:"";position:absolute;right:0;bottom:1px;width:12px;height:12px;border-radius:50%;background:#4cd964;border:2px solid #fff}
+
+  /* ---------- Окно чата ---------- */
+  #chat{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg-chat);position:relative}
+  #placeholder{flex:1;display:flex;align-items:center;justify-content:center}
+  #placeholder span{background:#0006;color:#fff;padding:6px 16px;border-radius:16px;font-size:14px}
+  #chatView{flex:1;display:flex;flex-direction:column;min-height:0}
+  .chat-head{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#fff;border-bottom:1px solid var(--line)}
+  .chat-head .t{line-height:1.25;min-width:0}
+  .chat-head .t b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chat-head .t span{font-size:13px;color:var(--gray)}
+  .chat-head .t span.on{color:var(--blue)}
+  #backBtn{display:none}
+  #messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column}
+  .day{align-self:center;background:#0005;color:#fff;font-size:13px;padding:3px 12px;border-radius:14px;margin:10px 0}
+  .msg{position:relative;max-width:min(75%,520px);padding:7px 10px 5px;border-radius:14px;margin-top:2px;box-shadow:0 1px 1px #0002;word-wrap:break-word;overflow-wrap:anywhere}
+  .msg .text{white-space:pre-wrap;font-size:15.5px;line-height:1.35}
+  .msg .meta{display:flex;justify-content:flex-end;gap:4px;font-size:11.5px;margin-top:1px;user-select:none}
+  .msg.in{align-self:flex-start;background:var(--bubble-in)}
+  .msg.in .meta{color:var(--gray)}
+  .msg.out{align-self:flex-end;background:var(--bubble-out);color:#fff}
+  .msg.out .meta{color:#d6efff}
+  .msg.gap{margin-top:8px}
+  /* хвостики пузырей */
+  .msg.in.tail{border-bottom-left-radius:3px}
+  .msg.out.tail{border-bottom-right-radius:3px}
+  .msg.in.tail::after,.msg.out.tail::after{content:"";position:absolute;bottom:0;width:9px;height:12px;background:inherit}
+  .msg.in.tail::after{left:-8px;clip-path:polygon(100% 0,100% 100%,0 100%)}
+  .msg.out.tail::after{right:-8px;clip-path:polygon(0 0,0 100%,100% 100%)}
+  .no-msgs{align-self:center;margin:auto;background:#0005;color:#fff;padding:6px 16px;border-radius:16px;font-size:14px}
+
+  .composer{display:flex;align-items:flex-end;gap:8px;padding:10px 14px;background:#fff;border-top:1px solid var(--line)}
+  .composer textarea{flex:1;resize:none;border:none;outline:none;max-height:140px;padding:9px 6px;font-size:15.5px;line-height:1.35;background:transparent}
+  #sendBtn{width:42px;height:42px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;flex:none}
+  #sendBtn:hover{background:var(--blue-dark)}
+  #sendBtn svg{width:22px;height:22px;fill:#fff;margin-left:2px}
+
+  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#222d;color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:200;max-width:90%;opacity:0;pointer-events:none;transition:opacity .25s}
+  #toast.show{opacity:1}
+
+  /* ---------- Адаптив: на телефоне либо список, либо чат ---------- */
+  @media (max-width:700px){
+    #sidebar{width:100%;min-width:0}
+    #chat{position:absolute;inset:0;transform:translateX(100%);transition:transform .22s}
+    #app.chat-open #chat{transform:none}
+    #backBtn{display:flex}
+    .msg{max-width:85%}
+  }
+</style>
+</head>
+<body>
+
+<!-- Загрузчик -->
+<div id="loader"><div class="spinner"></div></div>
+
+<!-- ===== Экран входа / регистрации ===== -->
+<div id="auth" class="hidden">
+  <div class="auth-card">
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M21.9 3.6 2.7 11c-1.3.5-1.3 1.3-.2 1.6l4.9 1.5 1.9 5.8c.2.6.1.9.8.9.5 0 .7-.2 1-.5l2.4-2.3 4.9 3.6c.9.5 1.5.2 1.8-.8l3.2-15.2c.3-1.3-.5-1.9-1.5-1.5zM8.5 13.5l10.6-6.7c.5-.3 1-.1.6.2l-8.8 7.9-.3 3.6z"/></svg></div>
+    <h1>Мессенджер</h1>
+    <div class="sub">Общайтесь в реальном времени</div>
+    <div id="cfgWarn" class="hidden">⚠️ Сначала вставьте ключи <b>firebaseConfig</b> в начале файла index.html.</div>
+    <div class="tabs">
+      <button id="tabLogin" class="active" type="button">Вход</button>
+      <button id="tabReg" type="button">Регистрация</button>
+    </div>
+    <form id="authForm" novalidate>
+      <div class="field hidden" id="nameField"><input id="nameInput" type="text" placeholder="Имя пользователя" maxlength="30" autocomplete="nickname"></div>
+      <div class="field"><input id="emailInput" type="email" placeholder="Email" autocomplete="email"></div>
+      <div class="field"><input id="passInput" type="password" placeholder="Пароль (мин. 6 символов)" autocomplete="current-password"></div>
+      <div id="authError"></div>
+      <button class="btn-main" id="authSubmit" type="submit">Войти</button>
+    </form>
+  </div>
+</div>
+
+<!-- ===== Экран мессенджера ===== -->
+<div id="app" class="hidden">
+  <aside id="sidebar">
+    <div class="side-head">
+      <div id="meAvatar" class="avatar sm"></div>
+      <div class="me"><b id="meName"></b><span>онлайн</span></div>
+      <button class="icon-btn" id="logoutBtn" title="Выйти">
+        <svg viewBox="0 0 24 24"><path d="M10 17l1.4-1.4-2.6-2.6H20v-2H8.8l2.6-2.6L10 7l-5 5 5 5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4V5z"/></svg>
+      </button>
+    </div>
+    <div class="search"><input id="searchInput" type="text" placeholder="Поиск"></div>
+    <div id="chatList"></div>
+  </aside>
+
+  <main id="chat">
+    <div id="placeholder"><span>Выберите, кому хотели бы написать</span></div>
+    <div id="chatView" class="hidden">
+      <div class="chat-head">
+        <button class="icon-btn" id="backBtn" title="Назад"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
+        <div id="peerAvatar" class="avatar sm"></div>
+        <div class="t"><b id="peerName"></b><span id="peerStatus"></span></div>
+      </div>
+      <div id="messages"></div>
+      <div class="composer">
+        <textarea id="msgInput" rows="1" placeholder="Написать сообщение..."></textarea>
+        <button id="sendBtn" title="Отправить"><svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+// ===================== ПОДКЛЮЧЕНИЕ FIREBASE (CDN, v10) =====================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, signOut, updateProfile
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy,
+  limit, onSnapshot, writeBatch, serverTimestamp, increment
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const $ = s => document.querySelector(s);
+const cfg = window.firebaseConfig;
+const configured = cfg && cfg.apiKey && !cfg.apiKey.includes("ВСТАВЬТЕ");
+
+let auth, db;
+if (configured) {
+  const fbApp = initializeApp(cfg);
+  auth = getAuth(fbApp);
+  db = getFirestore(fbApp);
+}
+
+// ===================== СОСТОЯНИЕ =====================
+let me = null;                 // текущий пользователь Firebase Auth
+let pendingName = null;        // имя, введённое при регистрации
+const users = new Map();       // uid -> данные профиля
+const chats = new Map();       // chatId -> данные чата
+let currentPeer = null;        // uid открытого собеседника
+let msgs = [];                 // сообщения открытого чата
+let forceScroll = false;
+let unsubUsers = null, unsubChats = null, unsubMsgs = null;
+let heartbeat = null, refresher = null;
+const marking = new Set();     // id сообщений, которые уже помечаются прочитанными
+
+// ===================== УТИЛИТЫ =====================
+const chatIdOf = (a, b) => [a, b].sort().join("_");
+const tsMs = t => (t && t.toMillis) ? t.toMillis() : 0;
+const COLORS = ["#e17076", "#7bc862", "#e5ca77", "#65aadd", "#a695e7", "#ee7aae", "#6ec9cb", "#faa774"];
+function colorOf(uid) { let h = 0; for (const c of uid) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; }
+const pad = n => String(n).padStart(2, "0");
+const hhmm = ms => { const d = new Date(ms); return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+const MONTHS = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+function dayKey(ms) { const d = new Date(ms); return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate(); }
+function dayLabel(ms) {
+  const d = new Date(ms), now = new Date();
+  if (dayKey(ms) === dayKey(now.getTime())) return "Сегодня";
+  if (dayKey(ms) === dayKey(now.getTime() - 864e5)) return "Вчера";
+  return d.getDate() + " " + MONTHS[d.getMonth()] + (d.getFullYear() !== now.getFullYear() ? " " + d.getFullYear() : "");
+}
+function listTime(ms) {
+  if (!ms) return "";
+  if (dayKey(ms) === dayKey(Date.now())) return hhmm(ms);
+  const d = new Date(ms); return pad(d.getDate()) + "." + pad(d.getMonth() + 1);
+}
+function toast(text, ms = 3500) {
+  const t = $("#toast"); t.textContent = text; t.classList.add("show");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms);
+}
+function avatar(el, name, uid, online) {
+  el.textContent = (name || "?").trim().charAt(0).toUpperCase();
+  el.style.background = colorOf(uid || name || "?");
+  el.classList.toggle("on", !!online);
+}
+// пользователь «онлайн», если lastSeen обновлялся меньше минуты назад
+const isOnline = u => u && Date.now() - tsMs(u.lastSeen) < 60000;
+function statusText(u) {
+  if (!u) return "";
+  if (isOnline(u)) return "онлайн";
+  const ms = tsMs(u.lastSeen);
+  if (!ms) return "был(а) давно";
+  const diff = Date.now() - ms;
+  if (diff < 10 * 60000) return "был(а) недавно";
+  if (dayKey(ms) === dayKey(Date.now())) return "был(а) сегодня в " + hhmm(ms);
+  return "был(а) " + listTime(ms);
+}
+const AUTH_ERRORS = {
+  "auth/invalid-email": "Некорректный email",
+  "auth/missing-password": "Введите пароль",
+  "auth/weak-password": "Пароль слишком короткий (минимум 6 символов)",
+  "auth/email-already-in-use": "Этот email уже зарегистрирован",
+  "auth/invalid-credential": "Неверный email или пароль",
+  "auth/user-not-found": "Пользователь не найден",
+  "auth/wrong-password": "Неверный пароль",
+  "auth/too-many-requests": "Слишком много попыток, попробуйте позже",
+  "auth/network-request-failed": "Нет соединения с сетью",
+  "auth/operation-not-allowed": "В Firebase не включён вход по email/паролю",
+  "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "Неверный apiKey в firebaseConfig"
+};
+
+// ===================== ЭКРАНЫ =====================
+const showLoader = v => $("#loader").classList.toggle("hidden", !v);
+function showScreen(name) {
+  $("#auth").classList.toggle("hidden", name !== "auth");
+  $("#app").classList.toggle("hidden", name !== "app");
+}
+
+// ===================== ВХОД / РЕГИСТРАЦИЯ =====================
+let mode = "login";
+function setMode(m) {
+  mode = m;
+  $("#tabLogin").classList.toggle("active", m === "login");
+  $("#tabReg").classList.toggle("active", m === "reg");
+  $("#nameField").classList.toggle("hidden", m !== "reg");
+  $("#authSubmit").textContent = m === "login" ? "Войти" : "Создать аккаунт";
+  $("#passInput").autocomplete = m === "login" ? "current-password" : "new-password";
+  $("#authError").textContent = "";
+}
+$("#tabLogin").onclick = () => setMode("login");
+$("#tabReg").onclick = () => setMode("reg");
+
+$("#authForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const err = $("#authError"), btn = $("#authSubmit");
+  err.textContent = "";
+  if (!configured) { err.textContent = "Не заполнен firebaseConfig"; return; }
+  const email = $("#emailInput").value.trim(), pass = $("#passInput").value, name = $("#nameInput").value.trim();
+  if (mode === "reg" && !name) { err.textContent = "Введите имя пользователя"; return; }
+  if (!email || !pass) { err.textContent = "Введите email и пароль"; return; }
+  const label = btn.textContent;
+  btn.disabled = true; btn.innerHTML = '<span class="spinner sm"></span>Подождите...';
+  try {
+    if (mode === "reg") {
+      pendingName = name;
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await updateProfile(cred.user, { displayName: name });
+      // профиль в Firestore создаётся в ensureUserDoc (вызывается из onAuthStateChanged)
+    } else {
+      await signInWithEmailAndPassword(auth, email, pass);
+    }
+  } catch (ex) {
+    pendingName = null;
+    err.textContent = AUTH_ERRORS[ex.code] || ("Ошибка: " + (ex.message || ex.code));
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+  }
+});
+
+// создаём/обновляем профиль пользователя в коллекции users
+async function ensureUserDoc(user) {
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    await setDoc(ref, {
+      uid: user.uid,
+      name: pendingName || user.displayName || (user.email || "user").split("@")[0],
+      email: user.email || "",
+      lastSeen: serverTimestamp(),
+      photoURL: user.photoURL || ""
+    });
+  } else {
+    await updateDoc(ref, { lastSeen: serverTimestamp() });
+  }
+  pendingName = null;
+}
+
+// ===================== ВЫХОД =====================
+$("#logoutBtn").onclick = async () => {
+  try { await updateDoc(doc(db, "users", me.uid), { lastSeen: serverTimestamp() }); } catch (e) {}
+  await signOut(auth);
+};
+
+// ===================== СОСТОЯНИЕ АВТОРИЗАЦИИ =====================
+if (!configured) {
+  $("#cfgWarn").classList.remove("hidden");
+  showScreen("auth"); showLoader(false);
+} else {
+  onAuthStateChanged(auth, async user => {
+    if (user) {
+      me = user;
+      try { await ensureUserDoc(user); }
+      catch (e) { toast("Ошибка Firestore: " + (e.code || e.message) + ". Проверьте правила и создана ли база."); }
+      startApp();
+      showScreen("app");
+    } else {
+      stopApp();
+      me = null;
+      showScreen("auth");
+    }
+    showLoader(false);
+  });
+}
+
+// ===================== ЗАПУСК / ОСТАНОВКА ПРИЛОЖЕНИЯ =====================
+function startApp() {
+  stopApp();
+  // все пользователи
+  unsubUsers = onSnapshot(collection(db, "users"), snap => {
+    users.clear();
+    snap.forEach(d => users.set(d.id, d.data({ serverTimestamps: "estimate" })));
+    renderMe(); renderList(); renderHeader();
+  }, e => toast("Не удалось загрузить пользователей: " + e.code));
+  // мои чаты (сортировка по updatedAt — на клиенте, чтобы не требовался индекс)
+  unsubChats = onSnapshot(query(collection(db, "chats"), where("participants", "array-contains", me.uid)), snap => {
+    chats.clear();
+    snap.forEach(d => chats.set(d.id, d.data({ serverTimestamps: "estimate" })));
+    renderList();
+  }, e => toast("Не удалось загрузить чаты: " + e.code));
+  // «онлайн»: обновляем lastSeen каждые 25 сек
+  const beat = () => { if (me && !document.hidden) updateDoc(doc(db, "users", me.uid), { lastSeen: serverTimestamp() }).catch(() => {}); };
+  heartbeat = setInterval(beat, 25000);
+  // перерисовка статусов («был(а) недавно» и т.п.)
+  refresher = setInterval(() => { renderList(); renderHeader(); }, 30000);
+  renderMe();
+}
+function stopApp() {
+  [unsubUsers, unsubChats, unsubMsgs].forEach(f => f && f());
+  unsubUsers = unsubChats = unsubMsgs = null;
+  clearInterval(heartbeat); clearInterval(refresher);
+  users.clear(); chats.clear(); msgs = []; currentPeer = null;
+  $("#chatList").innerHTML = "";
+  $("#chatView").classList.add("hidden"); $("#placeholder").classList.remove("hidden");
+  $("#app").classList.remove("chat-open");
+}
+document.addEventListener("visibilitychange", () => {
+  if (!me || document.hidden) return;
+  updateDoc(doc(db, "users", me.uid), { lastSeen: serverTimestamp() }).catch(() => {});
+  markRead();
+});
+
+// ===================== СПИСОК ЧАТОВ =====================
+function renderMe() {
+  const u = users.get(me.uid);
+  const name = (u && u.name) || me.displayName || me.email;
+  $("#meName").textContent = name;
+  avatar($("#meAvatar"), name, me.uid, false);
+}
+
+function renderList() {
+  if (!me) return;
+  const q = $("#searchInput").value.trim().toLowerCase();
+  const list = [];
+  users.forEach((u, uid) => {
+    if (uid === me.uid) return;
+    if (q && !(u.name || "").toLowerCase().includes(q)) return;
+    const chat = chats.get(chatIdOf(me.uid, uid));
+    list.push({ uid, u, chat, t: chat ? tsMs(chat.updatedAt) : 0 });
+  });
+  // сначала чаты по времени последнего сообщения, затем остальные по алфавиту
+  list.sort((a, b) => (b.t - a.t) || (a.u.name || "").localeCompare(b.u.name || "", "ru"));
+
+  const box = $("#chatList");
+  box.innerHTML = "";
+  if (!list.length) {
+    const d = document.createElement("div");
+    d.className = "empty-list";
+    d.textContent = q ? "Ничего не найдено" : "Пока нет других пользователей. Зарегистрируйте второй аккаунт, чтобы начать общение.";
+    box.appendChild(d); return;
+  }
+  for (const { uid, u, chat, t } of list) {
+    const unread = chat && chat.unread ? (chat.unread[me.uid] || 0) : 0;
+    const item = document.createElement("div");
+    item.className = "chat-item" + (uid === currentPeer ? " active" : "") + (unread ? " unread" : "");
+    const av = document.createElement("div"); av.className = "avatar";
+    avatar(av, u.name, uid, isOnline(u));
+    const info = document.createElement("div"); info.className = "info";
+    const row1 = document.createElement("div"); row1.className = "row";
+    const nm = document.createElement("div"); nm.className = "name"; nm.textContent = u.name || "Без имени";
+    const tm = document.createElement("div"); tm.className = "time"; tm.textContent = listTime(t);
+    row1.append(nm, tm);
+    const row2 = document.createElement("div"); row2.className = "row";
+    const last = document.createElement("div"); last.className = "last";
+    if (chat && chat.lastMessage) last.textContent = (chat.lastSenderId === me.uid ? "Вы: " : "") + chat.lastMessage;
+    else last.textContent = statusText(u);
+    row2.appendChild(last);
+    if (unread) { const b = document.createElement("div"); b.className = "badge"; b.textContent = unread > 99 ? "99+" : unread; row2.appendChild(b); }
+    info.append(row1, row2);
+    item.append(av, info);
+    item.onclick = () => openChat(uid);
+    box.appendChild(item);
+  }
+}
+$("#searchInput").addEventListener("input", renderList);
+
+// ===================== ОКНО ЧАТА =====================
+function renderHeader() {
+  if (!currentPeer) return;
+  const u = users.get(currentPeer);
+  if (!u) return;
+  $("#peerName").textContent = u.name || "Без имени";
+  avatar($("#peerAvatar"), u.name, currentPeer, isOnline(u));
+  const st = $("#peerStatus");
+  st.textContent = statusText(u);
+  st.classList.toggle("on", isOnline(u));
+}
+
+function openChat(uid) {
+  if (uid === currentPeer) { $("#app").classList.add("chat-open"); return; }
+  if (unsubMsgs) { unsubMsgs(); unsubMsgs = null; }
+  currentPeer = uid; msgs = []; forceScroll = true;
+  $("#placeholder").classList.add("hidden");
+  $("#chatView").classList.remove("hidden");
+  $("#app").classList.add("chat-open");
+  $("#messages").innerHTML = "";
+  renderHeader(); renderList();
+  const id = chatIdOf(me.uid, uid);
+  // последние 300 сообщений в реальном времени
+  const q = query(collection(db, "chats", id, "messages"), orderBy("createdAt", "desc"), limit(300));
+  unsubMsgs = onSnapshot(q, snap => {
+    msgs = snap.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) })).reverse();
+    renderMessages();
+    markRead();
+  }, e => toast("Не удалось загрузить сообщения: " + e.code));
+  if (window.innerWidth > 700) $("#msgInput").focus();
+}
+
+$("#backBtn").onclick = () => {
+  $("#app").classList.remove("chat-open");
+  if (unsubMsgs) { unsubMsgs(); unsubMsgs = null; }
+  currentPeer = null; msgs = [];
+  $("#chatView").classList.add("hidden"); $("#placeholder").classList.remove("hidden");
+  renderList();
+};
+
+function renderMessages() {
+  const box = $("#messages");
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+  const lastOwn = msgs.length && msgs[msgs.length - 1].senderId === me.uid;
+  box.innerHTML = "";
+  if (!msgs.length) {
+    const d = document.createElement("div"); d.className = "no-msgs"; d.textContent = "Сообщений пока нет. Напишите первым!";
+    box.appendChild(d);
+  }
+  let prevDay = "", prevSender = null;
+  msgs.forEach((m, i) => {
+    const ms = tsMs(m.createdAt) || Date.now();
+    const dk = dayKey(ms);
+    if (dk !== prevDay) {
+      const d = document.createElement("div"); d.className = "day"; d.textContent = dayLabel(ms);
+      box.appendChild(d); prevDay = dk; prevSender = null;
+    }
+    const mine = m.senderId === me.uid;
+    const next = msgs[i + 1];
+    const tail = !next || next.senderId !== m.senderId || dayKey(tsMs(next.createdAt) || Date.now()) !== dk;
+    const el = document.createElement("div");
+    el.className = "msg " + (mine ? "out" : "in") + (tail ? " tail" : "") + (prevSender !== null && prevSender !== m.senderId ? " gap" : "");
+    const tx = document.createElement("div"); tx.className = "text"; tx.textContent = m.text;
+    const meta = document.createElement("div"); meta.className = "meta";
+    meta.textContent = hhmm(ms) + (mine ? (m.read ? " ✓✓" : " ✓") : "");
+    el.append(tx, meta);
+    box.appendChild(el);
+    prevSender = m.senderId;
+  });
+  if (forceScroll || nearBottom || lastOwn) { box.scrollTop = box.scrollHeight; forceScroll = false; }
+}
+
+// помечаем входящие сообщения прочитанными и обнуляем счётчик
+async function markRead() {
+  if (!currentPeer || document.hidden) return;
+  const unread = msgs.filter(m => m.senderId !== me.uid && !m.read && !marking.has(m.id));
+  if (!unread.length) return;
+  const id = chatIdOf(me.uid, currentPeer);
+  unread.forEach(m => marking.add(m.id));
+  try {
+    const batch = writeBatch(db);
+    unread.forEach(m => batch.update(doc(db, "chats", id, "messages", m.id), { read: true }));
+    batch.update(doc(db, "chats", id), { ["unread." + me.uid]: 0 });
+    await batch.commit();
+  } catch (e) {
+    unread.forEach(m => marking.delete(m.id));
+  }
+}
+
+// ===================== ОТПРАВКА СООБЩЕНИЯ =====================
+async function sendMessage() {
+  const input = $("#msgInput");
+  const text = input.value.trim();
+  if (!text || !currentPeer) return;          // пустое сообщение не отправляем
+  input.value = ""; autosize();
+  const peer = currentPeer, id = chatIdOf(me.uid, peer);
+  forceScroll = true;
+  try {
+    const batch = writeBatch(db);
+    // 1) само сообщение
+    batch.set(doc(collection(db, "chats", id, "messages")), {
+      senderId: me.uid, text, createdAt: serverTimestamp(), read: false
+    });
+    // 2) документ чата: последнее сообщение, время и счётчик непрочитанных собеседника
+    batch.set(doc(db, "chats", id), {
+      chatId: id,
+      participants: [me.uid, peer].sort(),
+      lastMessage: text.slice(0, 200),
+      lastSenderId: me.uid,
+      updatedAt: serverTimestamp(),
+      unread: { [peer]: increment(1) }
+    }, { merge: true });
+    await batch.commit();
+  } catch (e) {
+    input.value = text; autosize();
+    toast("Не удалось отправить: " + (e.code || e.message));
+  }
+}
+$("#sendBtn").onclick = sendMessage;
+$("#msgInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); }
+});
+function autosize() { const t = $("#msgInput"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }
+$("#msgInput").addEventListener("input", autosize);
+</script>
+
+<!--
+============================================================
+ПРАВИЛА БЕЗОПАСНОСТИ FIRESTORE (Firestore → Правила → вставить → Опубликовать):
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /chats/{chatId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.participants;
+      allow create: if request.auth != null
+                    && request.auth.uid in request.resource.data.participants
+                    && request.auth.uid in chatId.split('_');
+      allow update: if request.auth != null
+                    && request.auth.uid in resource.data.participants
+                    && request.resource.data.participants == resource.data.participants;
+      match /messages/{msgId} {
+        allow read: if request.auth != null && request.auth.uid in chatId.split('_');
+        allow create: if request.auth != null
+                      && request.auth.uid in chatId.split('_')
+                      && request.resource.data.senderId == request.auth.uid;
+        allow update: if request.auth != null
+                      && request.auth.uid in chatId.split('_')
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      }
+    }
+  }
+}
+============================================================
+-->
+</body>
+</html>
